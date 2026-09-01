@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { MAX_QTY, MIN_QTY, UNIT_PRICE_NGN, shippingFor, totalFor } from "./pricing";
+import { MAX_QTY, MIN_QTY, pricingFor, UNIT_PRICE_NGN } from "./pricing";
 
 const orderSchema = z.object({
   buyerName: z.string().trim().min(2).max(120),
@@ -34,6 +34,15 @@ export const submitOrder = createServerFn({ method: "POST" })
     const email = String(context.claims['email'] ?? "").toLowerCase();
     if (!email) throw new Error("Your account has no verified email address.");
 
+    let discount = 0;
+    const couponCode = data.couponCode ? data.couponCode.toUpperCase() : null;
+    if (couponCode) {
+      const { data: coupon } = await context.supabase.from("coupons").select("code, discount_type, discount_value, active, expires_at").eq("code", couponCode).maybeSingle();
+      if (!coupon || coupon.discount_type !== "percentage" || !coupon.active || coupon.discount_value < 1 || coupon.discount_value > 100 || (coupon.expires_at && new Date(coupon.expires_at) <= new Date())) throw new Error("That coupon is not valid");
+      discount = Math.round(data.quantity * UNIT_PRICE_NGN * coupon.discount_value / 100);
+    }
+    const pricing = pricingFor(data.quantity, discount);
+
     const { data: order, error } = await context.supabase
       .from("orders")
       .insert({
@@ -44,14 +53,16 @@ export const submitOrder = createServerFn({ method: "POST" })
         buyer_phone: data.buyerPhone,
         quantity: data.quantity,
         unit_price_ngn: UNIT_PRICE_NGN,
-        shipping_fee_ngn: shippingFor(data.quantity),
-        total_ngn: totalFor(data.quantity),
+        shipping_fee_ngn: pricing.shipping,
+        transaction_fee_ngn: pricing.transactionFee,
+        discount_ngn: pricing.discount,
+        total_ngn: pricing.total,
         address_line: data.addressLine,
         city: data.city,
         state: data.state,
         landmark: data.landmark || null,
         delivery_note: data.deliveryNote || null,
-        coupon_code: data.couponCode ? data.couponCode.toUpperCase() : null,
+        coupon_code: couponCode,
         email_verified: true,
       })
       .select("reference, quantity, total_ngn, buyer_email")

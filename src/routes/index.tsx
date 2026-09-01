@@ -37,14 +37,13 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { submitOrder } from "@/lib/orders.functions";
 import {
-  FREE_SHIPPING_MIN_QTY,
   MAX_QTY,
   MIN_QTY,
   NIGERIAN_STATES,
   UNIT_PRICE_NGN,
   naira,
   shippingFor,
-  totalFor,
+  pricingFor,
 } from "@/lib/pricing";
 
 const APP_URL =
@@ -312,8 +311,9 @@ function OrderFlow() {
   const [deliveryNote, setDeliveryNote] = useState("");
   const [couponCode, setCouponCode] = useState("");
 
-  const shipping = shippingFor(quantity);
-  const total = totalFor(quantity);
+  const pricing = pricingFor(quantity);
+  const shipping = pricing.shipping;
+  const total = pricing.total;
 
   // Restore an in-progress order (the customer may leave to open the email link).
   useEffect(() => {
@@ -544,7 +544,7 @@ function OrderFlow() {
               <Label className="mb-2 block">Quantity</Label>
               <QuantityPicker value={quantity} onChange={setQuantity} />
               <p className="mt-2 text-xs text-muted-foreground">
-                Free delivery on {FREE_SHIPPING_MIN_QTY} tags or more. Max {MAX_QTY} per order.
+                Delivery is {naira(shipping)} per order. Max {MAX_QTY} per order.
               </p>
             </div>
 
@@ -597,7 +597,7 @@ function OrderFlow() {
               />
             </Field>
 
-            <Summary quantity={quantity} shipping={shipping} total={total} />
+            <Summary quantity={quantity} pricing={pricing} />
             <ErrorNote error={error} />
             <Button
               size="lg"
@@ -757,7 +757,7 @@ function OrderFlow() {
               />
             </Field>
 
-            <Summary quantity={quantity} shipping={shipping} total={total} />
+            <Summary quantity={quantity} pricing={pricing} />
             <ErrorNote error={error} />
             <Button size="lg" className="w-full" disabled={busy} onClick={finishOrder}>
               {busy ? <Loader2 className="size-4 animate-spin" /> : null}
@@ -766,6 +766,7 @@ function OrderFlow() {
             <p className="text-center text-xs text-muted-foreground">
               Payments are processed securely by Paystack. Card, bank transfer and USSD accepted.
             </p>
+            <p className="text-center text-xs text-muted-foreground">By verifying your email and making payment, you agree to the creation of a basic account for the sole purpose of tracking your delivery and receiving important updates and information about the product. This account is deletable upon request.</p>
           </>
         )}
       </div>
@@ -847,15 +848,7 @@ function QuantityPicker({ value, onChange }: { value: number; onChange: (n: numb
   );
 }
 
-function Summary({
-  quantity,
-  shipping,
-  total,
-}: {
-  quantity: number;
-  shipping: number;
-  total: number;
-}) {
+function Summary({ quantity, pricing }: { quantity: number; pricing: ReturnType<typeof pricingFor> }) {
   return (
     <div className="rounded-2xl bg-secondary p-4 text-sm">
       <div className="flex justify-between py-1">
@@ -866,13 +859,12 @@ function Summary({
       </div>
       <div className="flex justify-between py-1">
         <span className="text-muted-foreground">Delivery</span>
-        <span className={shipping === 0 ? "text-success" : undefined}>
-          {shipping === 0 ? "Free" : naira(shipping)}
-        </span>
+        <span>{naira(pricing.shipping)}</span>
       </div>
+      <div className="flex justify-between py-1"><span className="text-muted-foreground">Transaction fee</span><span>{naira(pricing.transactionFee)}</span></div>
       <div className="mt-2 flex justify-between border-t border-border pt-3 font-display text-base font-semibold">
         <span>Total</span>
-        <span>{naira(total)}</span>
+        <span>{naira(pricing.total)}</span>
       </div>
     </div>
   );
